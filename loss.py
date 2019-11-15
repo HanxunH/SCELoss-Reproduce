@@ -11,6 +11,7 @@ class SCELoss(torch.nn.Module):
         self.softmax = torch.nn.Softmax(dim=1)
 
     def forward(self, pred, labels):
+        pred = self.softmax(pred)
         label_one_hot = torch.nn.functional.one_hot(labels, self.num_classes).float().to(self.device)
 
         pred = torch.clamp(pred, min=1e-7, max=1.0)
