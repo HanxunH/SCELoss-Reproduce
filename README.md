@@ -18,7 +18,7 @@ Example for 0.4 Symmetric noise rate with SCE loss
 ```console
 # CIFAR10
 $ python3 -u train.py  --loss         SCE               \
-	                   --dataset_type cifar10           \
+	               --dataset_type cifar10           \
                        --l2_reg       1e-2              \
                        --seed         123               \
                        --alpha        0.1               \
