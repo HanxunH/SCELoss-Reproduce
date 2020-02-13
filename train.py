@@ -1,18 +1,19 @@
 import argparse
 import torch
 import time
+import logging
+import os
 from model import SCEModel, ResNet34
-from dataset import cifarDataset
+from dataset import DatasetGenerator
 from tqdm import tqdm
 from utils.utils import AverageMeter, accuracy, count_parameters_in_MB
-from torch.optim.lr_scheduler import MultiStepLR
 from train_util import TrainUtil
 from loss import SCELoss
 
 # ArgParse
 parser = argparse.ArgumentParser(description='SCE Loss')
 parser.add_argument('--lr', type=float, default=0.01)
-parser.add_argument('--l2_reg', type=float, default=5e-3)
+parser.add_argument('--l2_reg', type=float, default=5e-4)
 parser.add_argument('--grad_bound', type=float, default=5.0)
 parser.add_argument('--train_log_every', type=int, default=50)
 parser.add_argument('--resume', action='store_true', default=False)
@@ -23,21 +24,43 @@ parser.add_argument('--data_nums_workers', type=int, default=8)
 parser.add_argument('--epoch', type=int, default=120)
 parser.add_argument('--nr', type=float, default=0.4, help='noise_rate')
 parser.add_argument('--loss', type=str, default='SCE', help='SCE, CE')
+parser.add_argument('--alpha', type=float, default=1.0, help='alpha scale')
+parser.add_argument('--beta', type=float, default=1.0, help='beta scale')
 parser.add_argument('--version', type=str, default='SCE0.0', help='Version')
-parser.add_argument('--train_cifar100', action='store_true', default=False)
+parser.add_argument('--dataset_type', choices=['cifar10', 'cifar100'], type=str, default='cifar10')
+parser.add_argument('--asym', action='store_true', default=False)
+parser.add_argument('--seed', type=int, default=123)
 
 args = parser.parse_args()
 GLOBAL_STEP, EVAL_STEP, EVAL_BEST_ACC, EVAL_BEST_ACC_TOP5 = 0, 0, 0, 0
 cell_arc = None
 
+
+def setup_logger(name, log_file, level=logging.INFO):
+    """To setup as many loggers as you want"""
+    formatter = logging.Formatter('%(asctime)s %(message)s')
+    handler = logging.FileHandler(log_file)
+    handler.setFormatter(formatter)
+
+    logger = logging.getLogger(name)
+    logger.setLevel(level)
+    logger.addHandler(handler)
+
+    return logger
+
+
+if not os.path.exists('logs'):
+    os.makedirs('logs')
+log_file_name = os.path.join('logs', args.version + '.log')
+logger = setup_logger(name=args.version, log_file=log_file_name)
 for arg in vars(args):
-    print(arg, getattr(args, arg))
+    logger.info("%s: %s" % (arg, getattr(args, arg)))
 
 if torch.cuda.is_available():
     torch.backends.cudnn.benchmark = True
     torch.backends.cudnn.deterministic = True
     device = torch.device('cuda')
-    print("Using CUDA!")
+    logger.info("Using CUDA!")
 else:
     device = torch.device('cpu')
 
@@ -82,7 +105,7 @@ def model_eval(epoch, fixed_cnn, data_loader):
                                   acc=acc.item(),
                                   test_acc_avg=valid_acc_meters.avg,
                                   test_acc_top5_avg=valid_acc5_meters.avg)
-            tqdm.write(display)
+            logger.info(display)
     display = log_display(epoch=epoch,
                           global_step=GLOBAL_STEP,
                           time_elapse=end-start,
@@ -91,7 +114,7 @@ def model_eval(epoch, fixed_cnn, data_loader):
                           acc=acc.item(),
                           test_acc_avg=valid_acc_meters.avg,
                           test_acc_top5_avg=valid_acc5_meters.avg)
-    tqdm.write(display)
+    logger.info(display)
     return valid_acc_meters.avg, valid_acc5_meters.avg
 
 
@@ -99,7 +122,7 @@ def train_fixed(starting_epoch, data_loader, fixed_cnn, criterion, fixed_cnn_opt
     global GLOBAL_STEP, reduction_arc, cell_arc, EVAL_BEST_ACC, EVAL_STEP, EVAL_BEST_ACC_TOP5
 
     for epoch in tqdm(range(starting_epoch, args.epoch)):
-        tqdm.write("=" * 20 + "Training" + "=" * 20)
+        logger.info("=" * 20 + "Training" + "=" * 20)
         fixed_cnn.train()
         train_loss_meters = AverageMeter()
         train_acc_meters = AverageMeter()
@@ -140,52 +163,55 @@ def train_fixed(starting_epoch, data_loader, fixed_cnn, criterion, fixed_cnn_opt
                                       acc_top5_avg=train_acc5_meters.avg,
                                       lr=lr,
                                       gn=grad_norm)
-                tqdm.write(display)
+                logger.info(display)
         fixed_cnn_scheduler.step()
-        tqdm.write("="*20 + "Eval" + "="*20)
+        logger.info("="*20 + "Eval" + "="*20)
         curr_acc, curr_acc5 = model_eval(epoch, fixed_cnn, data_loader)
-        print("curr_acc\t%.4f" % curr_acc)
-        print("BEST_ACC\t%.4f" % EVAL_BEST_ACC)
-        print("curr_acc_top5\t%.4f" % curr_acc5)
-        print("BEST_ACC_top5\t%.4f" % EVAL_BEST_ACC_TOP5)
+        logger.info("curr_acc\t%.4f" % curr_acc)
+        logger.info("BEST_ACC\t%.4f" % EVAL_BEST_ACC)
+        logger.info("curr_acc_top5\t%.4f" % curr_acc5)
+        logger.info("BEST_ACC_top5\t%.4f" % EVAL_BEST_ACC_TOP5)
         payload = '=' * 10 + '\n'
         payload = payload + ("curr_acc: %.4f\n best_acc: %.4f\n" % (curr_acc, EVAL_BEST_ACC))
         payload = payload + ("curr_acc_top5: %.4f\n best_acc_top5: %.4f\n" % (curr_acc5, EVAL_BEST_ACC_TOP5))
         EVAL_BEST_ACC = max(curr_acc, EVAL_BEST_ACC)
         EVAL_BEST_ACC_TOP5 = max(curr_acc5, EVAL_BEST_ACC_TOP5)
-        tqdm.write("Model Saved!\n")
+        logger.info("Model Saved!\n")
     return
 
 
 def train():
     global GLOBAL_STEP, reduction_arc, cell_arc
     # Dataset
-    dataset = cifarDataset(batchSize=args.batch_size,
-                           dataPath=args.data_path,
-                           numOfWorkers=args.data_nums_workers,
-                           noise_rate=args.nr,
-                           is_cifar100=args.train_cifar100)
+    dataset = DatasetGenerator(batchSize=args.batch_size,
+                               dataPath=args.data_path,
+                               numOfWorkers=args.data_nums_workers,
+                               noise_rate=args.nr,
+                               asym=args.asym,
+                               seed=args.seed,
+                               dataset_type=args.dataset_type)
     dataLoader = dataset.getDataLoader()
 
-    if args.train_cifar100:
+    if args.dataset_type == 'cifar100':
         num_classes = 100
+        args.epoch = 150
         fixed_cnn = ResNet34(num_classes=num_classes)
-    else:
+    elif args.dataset_type == 'cifar10':
         num_classes = 10
+        args.epoch = 120
         fixed_cnn = SCEModel()
+    else:
+        raise('Unimplemented')
 
     if args.loss == 'SCE':
-        if args.train_cifar100:
-            criterion = SCELoss(alpha=6.0, beta=0.1, num_classes=num_classes)
-        else:
-            criterion = SCELoss(alpha=0.1, beta=1.0, num_classes=num_classes)
+        criterion = SCELoss(alpha=args.alpha, beta=args.beta, num_classes=num_classes)
     elif args.loss == 'CE':
         criterion = torch.nn.CrossEntropyLoss()
     else:
-        print("Unknown loss")
+        logger.info("Unknown loss")
 
-    print(criterion.__class__.__name__)
-    print("Number of Trainable Parameters %.4f" % count_parameters_in_MB(fixed_cnn))
+    logger.info(criterion.__class__.__name__)
+    logger.info("Number of Trainable Parameters %.4f" % count_parameters_in_MB(fixed_cnn))
     fixed_cnn = torch.nn.DataParallel(fixed_cnn)
     fixed_cnn.to(device)
 
@@ -195,11 +221,7 @@ def train():
                                          nesterov=True,
                                          weight_decay=args.l2_reg)
 
-    if args.train_cifar100:
-        milestone = [80, 120]
-    else:
-        milestone = [40, 80]
-    fixed_cnn_scheduler = MultiStepLR(fixed_cnn_optmizer, milestone, gamma=0.1)
+    fixed_cnn_scheduler = torch.optim.lr_scheduler.StepLR(fixed_cnn_optmizer, 1, gamma=0.97)
 
     utilHelper = TrainUtil(checkpoint_path=args.checkpoint_path, version=args.version)
     starting_epoch = 0

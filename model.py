@@ -36,15 +36,6 @@ class SCEModel(nn.Module):
             nn.BatchNorm1d(256),
             nn.ReLU())
         self.fc2 = nn.Linear(256, 10)
-        self._reset_prams()
-
-    def _reset_prams(self):
-        for m in self.modules():
-            if isinstance(m, nn.Conv2d):
-                nn.init.kaiming_uniform_(m.weight, mode='fan_in', nonlinearity='relu')
-            elif isinstance(m, nn.Linear):
-                nn.init.xavier_uniform_(m.weight)
-        return
 
     def forward(self, x):
         x = self.block1(x)
@@ -55,14 +46,6 @@ class SCEModel(nn.Module):
         x = self.fc1(x)
         x = self.fc2(x)
         return x
-
-
-'''ResNet in PyTorch.
-For Pre-activation ResNet, see 'preact_resnet.py'.
-Reference:
-[1] Kaiming He, Xiangyu Zhang, Shaoqing Ren, Jian Sun
-    Deep Residual Learning for Image Recognition. arXiv:1512.03385
-'''
 
 
 class BasicBlock(nn.Module):

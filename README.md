@@ -1,4 +1,5 @@
-# SCELoss-Reproduce
+
+# SCELoss-PyTorch
 
 Official Repo: https://github.com/YisenWang/symmetric_cross_entropy_for_noisy_labels \
 Reproduce result for ICCV2019 paper ["Symmetric Cross Entropy for Robust Learning with Noisy Labels"](https://arxiv.org/abs/1908.06112)
@@ -7,15 +8,45 @@ Reproduce result for ICCV2019 paper ["Symmetric Cross Entropy for Robust Learnin
 ##### Arguments
 * --loss: 'SCE', 'CE'
 * --nr: 0.0 to 1.0 specify the nosie rate.
-* --train_cifar100: if train on CIFAR100
-* --epoch
+* --dataset_type: 'cifar10' or 'cifar100'
+* --alpha: alpha for SCE
+* --beta: beta for SCE
+* --seed: random seed
+* --version: For experiment notes
 
 Example for 0.4 Symmetric noise rate with SCE loss
 ```console
-$ python train.py --nr 0.4 --loss SCE --epoch 120
+# CIFAR10
+$ python3 -u train.py  --loss         SCE               \
+	                   --dataset_type cifar10           \
+                       --l2_reg       1e-2              \
+                       --seed         123               \
+                       --alpha        0.1               \
+                       --beta         1.0               \
+                       --version      SCE0.4_CIFAR10    \
+                       --nr           0.4
+
+# CIFAR100
+$ python3 -u train.py  --lr           0.01              \
+                       --loss         SCE               \
+                       --dataset_type cifar100          \
+                       --l2_reg       1e-2              \
+                       --seed         123               \
+                       --alpha        6.0               \
+                       --beta         1.0               \
+                       --version      SCE0.4_CIFAR100   \
+                       --nr           0.4
+
 ```
-## Reporduced Results on CIFAR10
+## Results on CIFAR10
+Result of best Epoch
 | Loss  | 0.0 | 0.2  | 0.4 | 0.6 | 0.8 |
 | ----- |:---:|:---:|:---:|:---:|:---:|
-| CE    |92.81|88.84|85.53|79.77|52.66|
-| SCE   |92.86|90.87|87.92|82.75|56.26|
+| CE    |92.68|84.70|72.77|54.14|31.23|
+| SCE   |92.05|89.96|84.65|73.77|36.28|
+
+## Results on CIFAR100
+| Loss  | 0.0 | 0.2  | 0.4 | 0.6 | 0.8 |
+| ----- |:---:|:---:|:---:|:---:|:---:|
+| CE    |73.84|61.70|42.88|20.47|4.88|
+| SCE   |73.57|62.31|46.50|24.00|12.51|
