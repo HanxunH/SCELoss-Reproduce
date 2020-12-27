@@ -15,10 +15,10 @@ parser = argparse.ArgumentParser(description='SCE Loss')
 parser.add_argument('--lr', type=float, default=0.01)
 parser.add_argument('--l2_reg', type=float, default=5e-4)
 parser.add_argument('--grad_bound', type=float, default=5.0)
-parser.add_argument('--train_log_every', type=int, default=50)
+parser.add_argument('--train_log_every', type=int, default=100)
 parser.add_argument('--resume', action='store_true', default=False)
 parser.add_argument('--batch_size', type=int, default=128)
-parser.add_argument('--data_path', default='data', type=str)
+parser.add_argument('--data_path', default='../../datasets', type=str)
 parser.add_argument('--checkpoint_path', default='checkpoints', type=str)
 parser.add_argument('--data_nums_workers', type=int, default=8)
 parser.add_argument('--epoch', type=int, default=120)
@@ -47,6 +47,22 @@ def setup_logger(name, log_file, level=logging.INFO):
     logger.addHandler(handler)
 
     return logger
+
+
+def adjust_weight_decay(model, l2_value):
+    conv, fc = [], []
+    for name, param in model.named_parameters():
+        print(name)
+        if not param.requires_grad:
+            # frozen weights
+            continue
+        if 'module.fc1' in name:
+            fc.append(param)
+        else:
+            conv.append(param)
+    params = [{'params': conv, 'weight_decay': l2_value}, {'params': fc, 'weight_decay': 0.01}]
+    print(fc)
+    return params
 
 
 if not os.path.exists('logs'):
@@ -215,13 +231,12 @@ def train():
     fixed_cnn = torch.nn.DataParallel(fixed_cnn)
     fixed_cnn.to(device)
 
-    fixed_cnn_optmizer = torch.optim.SGD(params=fixed_cnn.parameters(),
+    fixed_cnn_optmizer = torch.optim.SGD(params=adjust_weight_decay(fixed_cnn, args.l2_reg),
                                          lr=args.lr,
                                          momentum=0.9,
-                                         nesterov=True,
-                                         weight_decay=args.l2_reg)
+                                         nesterov=True)
 
-    fixed_cnn_scheduler = torch.optim.lr_scheduler.StepLR(fixed_cnn_optmizer, 1, gamma=0.97)
+    fixed_cnn_scheduler = torch.optim.lr_scheduler.MultiStepLR(fixed_cnn_optmizer, milestones=[40, 80], gamma=0.1)
 
     utilHelper = TrainUtil(checkpoint_path=args.checkpoint_path, version=args.version)
     starting_epoch = 0

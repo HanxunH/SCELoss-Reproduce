@@ -1,8 +1,12 @@
-
 # SCELoss-PyTorch
 
 Official Repo: https://github.com/YisenWang/symmetric_cross_entropy_for_noisy_labels \
 Reproduce result for ICCV2019 paper ["Symmetric Cross Entropy for Robust Learning with Noisy Labels"](https://arxiv.org/abs/1908.06112)
+
+## Update
+In the tensorflow version [Official Repo](https://github.com/YisenWang/symmetric_cross_entropy_for_noisy_labels), the model uses l2 weight decay of 0.01 on model.fc1, which will gives a better results.
+The code has been updated, now it should shows similar performance as in the paper.
+
 
 ## How To Run
 ##### Arguments
@@ -18,7 +22,7 @@ Example for 0.4 Symmetric noise rate with SCE loss
 ```console
 # CIFAR10
 $ python3 -u train.py  --loss         SCE               \
-	                   --dataset_type cifar10           \
+	                     --dataset_type cifar10           \
                        --l2_reg       1e-2              \
                        --seed         123               \
                        --alpha        0.1               \

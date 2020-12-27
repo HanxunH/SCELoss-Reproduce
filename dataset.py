@@ -66,7 +66,8 @@ def other_class(n_classes, current_class):
 
 class cifar10Nosiy(datasets.CIFAR10):
     def __init__(self, root, train=True, transform=None, target_transform=None, download=False, nosiy_rate=0.0, asym=False):
-        super(cifar10Nosiy, self).__init__(root, transform=transform, target_transform=target_transform)
+        super(cifar10Nosiy, self).__init__(root, download=download, transform=transform,
+                                           target_transform=target_transform)
         if asym:
             # automobile < - truck, bird -> airplane, cat <-> dog, deer -> horse
             source_class = [9, 2, 3, 5, 4]
@@ -144,17 +145,9 @@ class cifar100Nosiy(datasets.CIFAR100):
 
 
 class DatasetGenerator():
-    def __init__(self,
-                 batchSize=128,
-                 eval_batch_size=256,
-                 dataPath='data/',
-                 seed=123,
-                 numOfWorkers=4,
-                 asym=False,
-                 dataset_type='cifar10',
-                 is_cifar100=False,
-                 cutout_length=16,
-                 noise_rate=0.4):
+    def __init__(self, batchSize=128, eval_batch_size=256, dataPath='../../datasets',
+                 seed=123, numOfWorkers=4, asym=False, dataset_type='cifar10',
+                 is_cifar100=False, cutout_length=16, noise_rate=0.4):
         self.seed = seed
         np.random.seed(seed)
         self.batchSize = batchSize
@@ -214,17 +207,12 @@ class DatasetGenerator():
                 transforms.ToTensor(),
                 transforms.Normalize(CIFAR_MEAN, CIFAR_STD)])
 
-            train_dataset = cifar10Nosiy(root=self.dataPath,
-                                         train=True,
-                                         transform=train_transform,
-                                         download=True,
-                                         asym=self.asym,
-                                         nosiy_rate=self.noise_rate)
+            train_dataset = cifar10Nosiy(root=self.dataPath, train=True,
+                                         transform=train_transform, download=True,
+                                         asym=self.asym, nosiy_rate=self.noise_rate)
 
-            test_dataset = datasets.CIFAR10(root=self.dataPath,
-                                            train=False,
-                                            transform=test_transform,
-                                            download=True)
+            test_dataset = datasets.CIFAR10(root=self.dataPath, train=False,
+                                            transform=test_transform, download=True)
         else:
             raise("Unknown Dataset")
 
